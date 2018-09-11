@@ -19,7 +19,7 @@ set -e               # exit on error
 
 cd "$(dirname "$0")" # connect to root
 
-docker build -t hadoop-build dev-support/docker
+sudo docker build -t hadoop-build dev-support/docker
 
 if [ "$(uname -s)" = "Linux" ]; then
   USER_NAME=${SUDO_USER:=$USER}
@@ -57,7 +57,7 @@ else # boot2docker uid and gid
   GROUP_ID=50
 fi
 
-docker build -t "hadoop-build-${USER_ID}" - <<UserSpecificDocker
+sudo docker build -t "hadoop-build-${USER_ID}" - <<UserSpecificDocker
 FROM hadoop-build
 RUN groupadd --non-unique -g ${GROUP_ID} ${USER_NAME}
 RUN useradd -g ${GROUP_ID} -u ${USER_ID} -k /root -m ${USER_NAME}
@@ -70,9 +70,11 @@ UserSpecificDocker
 # within the container and use the result on your normal
 # system.  And this also is a significant speedup in subsequent
 # builds because the dependencies are downloaded only once.
-docker run --rm=true -t -i \
+sudo docker run --rm=true -t -i \
   -v "${PWD}:/home/${USER_NAME}/hadoop${V_OPTS:-}" \
   -w "/home/${USER_NAME}/hadoop" \
+  --env HISTFILE="/home/${USER_NAME}/hadoop/.bash_history" \
+  --hostname "hadoop-build-env" \
   -v "${HOME}/.m2:/home/${USER_NAME}/.m2${V_OPTS:-}" \
   -u "${USER_NAME}" \
   "hadoop-build-${USER_ID}"
