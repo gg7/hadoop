@@ -936,7 +936,7 @@ public class DelegationTokenRenewer extends AbstractService {
             "Unable to add the application to the delegation token renewer.",
             t);
         // Sending APP_REJECTED is fine, since we assume that the
-        // RMApp is in NEW state and thus we havne't yet informed the
+        // RMApp is in NEW state and thus we haven't yet informed the
         // Scheduler about the existence of the application
         rmContext.getDispatcher().getEventHandler().handle(
             new RMAppEvent(event.getApplicationId(),
