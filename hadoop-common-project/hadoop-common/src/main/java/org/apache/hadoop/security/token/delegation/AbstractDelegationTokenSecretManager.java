@@ -510,7 +510,7 @@ extends AbstractDelegationTokenIdentifier>
     if (!id.getRenewer().toString().equals(renewer)) {
       throw new AccessControlException(renewer
           + " tries to renew a token " + formatTokenId(id)
-          + " with non-matching renewer " + id.getRenewer());
+          + " with non-matching renewer " + id.getRenewer() + " != " + renewer);
     }
     DelegationKey key = getDelegationKey(id.getMasterKeyId());
     if (key == null) {
