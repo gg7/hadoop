@@ -188,7 +188,47 @@ public class FSParentQueue extends FSQueue {
     // Hold the write lock when sorting childQueues
     writeLock.lock();
     try {
-      Collections.sort(childQueues, policy.getComparator());
+      // Crude workaround for the following crash (when running 3.1.2):
+      //
+      // > 2018-11-21 15:19:59,431 INFO org.apache.hadoop.yarn.server.resourcemanager.rmcontainer.RMContainerImpl: container_1537261967824_3360_01_000001 Container Transitioned from ALLOCATED to ACQUIRED
+      // > 2018-11-21 15:19:59,431 INFO org.apache.hadoop.yarn.server.resourcemanager.security.NMTokenSecretManagerInRM: Clear node set for appattempt_1537261967824_3360_000001
+      // > 2018-11-21 15:19:59,431 INFO org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptImpl: Storing attempt: AppId: application_1537261967824_3360 AttemptId: appattempt_1537261967824_3360_000001 MasterContainer: Container: [ContainerId: container_1537261967824_3360_01_000001, AllocationRequestId: -1, Version: 0, NodeId: censored-worker-5:38230, NodeHttpAddress: censored-worker-5:8042, Resource: <memory:1024, vCores:1>, Priority: 0, Token: Token { kind: ContainerToken, service: 10.222.9.200:38230 }, ExecutionType: GUARANTEED, ]
+      // > 2018-11-21 15:19:59,431 INFO org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptImpl: appattempt_1537261967824_3360_000001 State change from SCHEDULED to ALLOCATED_SAVING on event = CONTAINER_ALLOCATED
+      // > 2018-11-21 15:19:59,432 INFO org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptImpl: appattempt_1537261967824_3360_000001 State change from ALLOCATED_SAVING to ALLOCATED on event = ATTEMPT_NEW_SAVED
+      // > 2018-11-21 15:19:59,432 FATAL org.apache.hadoop.yarn.event.EventDispatcher: Error in handling event type NODE_UPDATE to the Event Dispatcher
+      // > java.lang.IllegalArgumentException: Comparison method violates its general contract!
+      // >         at java.util.TimSort.mergeHi(TimSort.java:899)
+      // >         at java.util.TimSort.mergeAt(TimSort.java:516)
+      // >         at java.util.TimSort.mergeForceCollapse(TimSort.java:457)
+      // >         at java.util.TimSort.sort(TimSort.java:254)
+      // >         at java.util.Arrays.sort(Arrays.java:1512)
+      // >         at java.util.ArrayList.sort(ArrayList.java:1454)
+      // >         at java.util.Collections.sort(Collections.java:175)
+      // >         at org.apache.hadoop.yarn.server.resourcemanager.scheduler.fair.FSParentQueue.assignContainer(FSParentQueue.java:191)
+      // >         at org.apache.hadoop.yarn.server.resourcemanager.scheduler.fair.FairScheduler.attemptScheduling(FairScheduler.java:1069)
+      // >         at org.apache.hadoop.yarn.server.resourcemanager.scheduler.fair.FairScheduler.nodeUpdate(FairScheduler.java:936)
+      // >         at org.apache.hadoop.yarn.server.resourcemanager.scheduler.fair.FairScheduler.handle(FairScheduler.java:1154)
+      // >         at org.apache.hadoop.yarn.server.resourcemanager.scheduler.fair.FairScheduler.handle(FairScheduler.java:129)
+      // >         at org.apache.hadoop.yarn.event.EventDispatcher$EventProcessor.run(EventDispatcher.java:66)
+      // >         at java.lang.Thread.run(Thread.java:745)
+      // > 2018-11-21 15:19:59,432 INFO org.apache.hadoop.yarn.server.resourcemanager.amlauncher.AMLauncher: Launching masterappattempt_1537261967824_3360_000001
+      // > 2018-11-21 15:19:59,467 INFO org.apache.hadoop.yarn.event.EventDispatcher: Exiting, bbye..
+      //
+      // Confirmed to be working:
+      //
+      // > ggaidarov@yarn:~$ grep -r 'Caught an exception when calling Collections.sort' /var/log/hadoop
+      // > /var/log/hadoop/hadoop-svc-yarn-resourcemanager-yarn.local.log.1:2019-04-03 16:25:02,340 ERROR org.apache.hadoop.yarn.server.resourcemanager.scheduler.fair.FSParentQueue: Caught an exception when calling Collections.sort(), retrying
+      for (int attempt = 0; true; ++attempt) {
+        try {
+          Collections.sort(childQueues, policy.getComparator());
+          break;
+        } catch (IllegalArgumentException e) {
+          if (attempt == 4) {
+            throw e;
+          }
+          LOG.error("Caught an exception when calling Collections.sort(), retrying");
+        }
+      }
     } finally {
       writeLock.unlock();
     }
