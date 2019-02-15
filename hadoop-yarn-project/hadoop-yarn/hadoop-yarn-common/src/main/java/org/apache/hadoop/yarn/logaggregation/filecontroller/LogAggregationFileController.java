@@ -90,13 +90,13 @@ public abstract class LogAggregationFileController {
    * Permissions for the Application directory.
    */
   protected static final FsPermission APP_DIR_PERMISSIONS = FsPermission
-      .createImmutable((short) 0770);
+      .createImmutable((short) 0775);
 
   /**
    * Umask for the log file.
    */
   protected static final FsPermission APP_LOG_FILE_UMASK = FsPermission
-      .createImmutable((short) (0640 ^ 0777));
+      .createImmutable((short) (0644 ^ 0777));
 
   // This is temporary solution. The configuration will be deleted once we have
   // the FileSystem API to check whether append operation is supported or not.

@@ -94,7 +94,7 @@ public class AggregatedLogFormat {
    * Umask for the log file.
    */
   private static final FsPermission APP_LOG_FILE_UMASK = FsPermission
-      .createImmutable((short) (0640 ^ 0777));
+      .createImmutable((short) (0644 ^ 0777));
 
   static {
     RESERVED_KEYS = new HashMap<String, AggregatedLogFormat.LogKey>();
