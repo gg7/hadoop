@@ -25,9 +25,11 @@ import org.apache.hadoop.yarn.server.nodemanager.executor.DeletionAsUserContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -44,6 +46,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -1668,6 +1671,36 @@ public class ContainerLaunch implements Callable<Integer> {
     envSet.add(envName);
   }
 
+  private String getUserHomeDir(String user) {
+    try {
+      Process process = new ProcessBuilder(
+              "bash",
+              "-c",
+              String.format("getent passwd \"%s\" | cut -d: -f6", container.getUser())
+      ).start();
+
+      boolean terminated = process.waitFor(5, TimeUnit.SECONDS);
+      if (!terminated) {
+        process.destroyForcibly();
+        return null;
+      }
+
+      try (BufferedReader processOutputReader = new BufferedReader(
+              new InputStreamReader(process.getInputStream()))) {
+        String readLine = processOutputReader.readLine();
+        if (readLine == null) {
+          LOG.warn("processOutputReader() returned null");
+          return null;
+        }
+
+        return readLine;
+      }
+    } catch (Exception e) {
+      LOG.warn("Exception while determining home dir for user {}: {}", user, e.getMessage());
+    }
+    return null;
+  }
+
   public void sanitizeEnv(Map<String, String> environment, Path pwd,
       List<Path> appDirs, List<String> userLocalDirs, List<String>
       containerLogDirs, Map<Path, List<String>> resources,
@@ -1718,10 +1751,15 @@ public class ContainerLaunch implements Callable<Integer> {
     addToEnvMap(environment, nmVars, Environment.LOGNAME.name(),
         container.getUser());
 
+    String actualHomeDir = null;
+    if (conf.get(YarnConfiguration.NM_USER_HOME_DIR) == null) {
+      actualHomeDir = getUserHomeDir(container.getUser());
+    }
+
     addToEnvMap(environment, nmVars, Environment.HOME.name(),
         conf.get(
-            YarnConfiguration.NM_USER_HOME_DIR, 
-            YarnConfiguration.DEFAULT_NM_USER_HOME_DIR
+            YarnConfiguration.NM_USER_HOME_DIR,
+            actualHomeDir != null ? actualHomeDir : YarnConfiguration.DEFAULT_NM_USER_HOME_DIR
             )
         );
 
